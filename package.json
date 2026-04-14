@@ -1,0 +1,13 @@
+{
+  "name": "mqtt-lwt-example",
+  "version": "1.0.0",
+  "description": "Exemplo prático de MQTT com LWT e retain flag usando Node.js",
+  "main": "publisher.js",
+  "scripts": {
+    "start:publisher": "node publisher.js",
+    "start:subscriber": "node subscriber.js"
+  },
+  "dependencies": {
+    "mqtt": "^5.0.0"
+  }
+}
