@@ -1,5 +1,7 @@
 # MQTT: LWT vs Retain Flag
 
+> Dupla: Leandro Poletti (1982910) e Letícia Pontes (1979942)
+
 ## Execução
 
 1. Clone e acesse o repositório
