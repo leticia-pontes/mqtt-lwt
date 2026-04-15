@@ -1,4 +1,77 @@
-## MQTT: LWT vs Retain Flag
+# MQTT: LWT vs Retain Flag
+
+## Execução
+
+1. Clone e acesse o repositório
+```bash
+git clone https://github.com/leticia-pontes/mqtt-lwt
+cd mqtt-lwt
+```
+
+2. Instale as dependências
+```bash
+npm install
+```
+
+4. Rode o docker compose
+```bash
+docker compose up -d
+```
+
+4. Rodar o subscriber
+```bash
+npm run start:subscriber
+```
+
+5. Rodar o publisher em um terminal separado
+```bash
+npm run start:publisher
+```
+
+6. Alterne entre rodar e encerrar o publisher e subscriber.
+
+### Aqui está o que acontece em cada situação:
+
+#### Cenário 1: Subscriber conectado antes do Publisher
+- O subscriber se inscreve no tópico e aguarda mensagens.
+- Quando o publisher inicia:
+  - Uma mensagem inicial é publicada.
+  - Se a **Retain Flag** estiver ativa, essa mensagem será armazenada no broker.
+- O subscriber recebe a mensagem normalmente.
+
+#### Cenário 2: Subscriber inicia após o Publisher já ter enviado mensagens
+- Se **Retain Flag estiver ativa**:
+  - O subscriber recebe imediatamente a última mensagem armazenada.
+- Se **Retain Flag não estiver ativa**:
+  - O subscriber não recebe nada até uma nova publicação ocorrer.
+
+#### Cenário 3: Encerramento inesperado do Publisher (CTRL+C, crash, queda)
+- O broker detecta a perda de conexão.
+- A mensagem configurada como **LWT** é publicada automaticamente.
+- O subscriber recebe essa mensagem indicando que o publisher está offline.
+
+#### Cenário 4: Encerramento controlado do Publisher
+- O publisher encerra a conexão corretamente.
+- O **LWT não é disparado**.
+- Se houver lógica explícita no código, pode haver uma mensagem manual de "offline".
+
+#### Cenário 5: Reinício do Publisher
+- O publisher reconecta ao broker.
+- Pode publicar novamente seu estado como "online".
+- Se usar **Retain Flag**, esse estado substitui o anterior no tópico.
+
+#### Cenário 6: Subscriber desconectado e reconectado
+- Ao reconectar:
+  - Recebe imediatamente a última mensagem **retida** (se existir).
+  - Não recebe eventos passados de LWT (pois não são persistidos, apenas publicados no momento da falha).
+
+### Esses cenários demonstram a diferença fundamental:
+- **LWT** reage a falhas de conexão (evento).
+- **Retain Flag** mantém estado (persistência).
+
+---
+
+## Explicação
 
 O protocolo MQTT opera fundamentado na separação entre a origem e o destino dos dados. Para solucionar problemas de sincronização e perda de conectividade, o protocolo disponibiliza dois recursos de controle: o **LWT (Last Will and Testament)** e a **Retain Flag**.
 
