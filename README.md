@@ -33,41 +33,80 @@ npm run start:publisher
 ### Aqui está o que acontece em cada situação:
 
 #### Cenário 1: Subscriber conectado antes do Publisher
-- O subscriber se inscreve no tópico e aguarda mensagens.
+- O subscriber se conecta com `clean: true` e se inscreve em:
+  - `device/status`
+  - `device/telemetry`
 - Quando o publisher inicia:
-  - Uma mensagem inicial é publicada.
-  - Se a **Retain Flag** estiver ativa, essa mensagem será armazenada no broker.
-- O subscriber recebe a mensagem normalmente.
+  - Publica `device/status = online` com **retain: true**
+  - Publica `device/telemetry` com **retain: true**
+- O subscriber recebe imediatamente ambas as mensagens.
 
 #### Cenário 2: Subscriber inicia após o Publisher já ter enviado mensagens
-- Se **Retain Flag estiver ativa**:
-  - O subscriber recebe imediatamente a última mensagem armazenada.
-- Se **Retain Flag não estiver ativa**:
-  - O subscriber não recebe nada até uma nova publicação ocorrer.
+- Como ambos os tópicos foram publicados com **retain: true**:
+  - O subscriber recebe imediatamente:
+    - `device/status = online`
+    - Última telemetria publicada
+- Isso ocorre mesmo sem novas publicações.
 
-#### Cenário 3: Encerramento inesperado do Publisher (CTRL+C, crash, queda)
-- O broker detecta a perda de conexão.
-- A mensagem configurada como **LWT** é publicada automaticamente.
-- O subscriber recebe essa mensagem indicando que o publisher está offline.
+#### Cenário 3: Encerramento inesperado do Publisher (kill -9, crash, queda)
+- O broker detecta a desconexão inesperada.
+- O **LWT configurado** é acionado:
+  - `device/status = offline` com **retain: true**
+- O subscriber recebe essa mensagem.
+- Como é retain:
+  - Esse "offline" passa a ser o estado persistido no tópico.
 
-#### Cenário 4: Encerramento controlado do Publisher
-- O publisher encerra a conexão corretamente.
-- O **LWT não é disparado**.
-- Se houver lógica explícita no código, pode haver uma mensagem manual de "offline".
+#### Cenário 4: Encerramento controlado do Publisher (CTRL+C)
+- O handler de `SIGINT` executa:
+  - Publica manualmente `device/status = offline` com **retain: true**
+- Em seguida, a conexão é encerrada corretamente (`client.end(false)`)
+- Resultado:
+  - O **LWT NÃO é disparado**
+  - Mas o efeito final é equivalente (status = offline), só que de forma explícita
 
 #### Cenário 5: Reinício do Publisher
-- O publisher reconecta ao broker.
-- Pode publicar novamente seu estado como "online".
-- Se usar **Retain Flag**, esse estado substitui o anterior no tópico.
+- Ao reconectar:
+  - Publica novamente `device/status = online` com **retain: true**
+  - Publica nova telemetria com **retain: true**
+- Isso sobrescreve:
+  - O `offline` anterior
+  - A telemetria anterior
+- O subscriber recebe essas atualizações em tempo real.
 
 #### Cenário 6: Subscriber desconectado e reconectado
+- Como o subscriber usa `clean: true`:
+  - Ele NÃO mantém sessão anterior
 - Ao reconectar:
-  - Recebe imediatamente a última mensagem **retida** (se existir).
-  - Não recebe eventos passados de LWT (pois não são persistidos, apenas publicados no momento da falha).
+  - Recebe imediatamente:
+    - Último `device/status` (retain)
+    - Última `device/telemetry` (retain)
+- Não recebe histórico de mensagens QoS 1 anteriores (sem sessão persistente).
 
-### Esses cenários demonstram a diferença fundamental:
-- **LWT** reage a falhas de conexão (evento).
-- **Retain Flag** mantém estado (persistência).
+### Esses cenários demonstram na prática:
+
+- **LWT (no código):**
+  - Configurado em `device/status`
+  - Publica `offline` automaticamente em falhas
+  - Usa **retain: true**, portanto altera o estado global
+
+- **Retain Flag (no código):**
+  - Aplicada em:
+    - `device/status`
+    - `device/telemetry`
+  - Garante que qualquer novo subscriber receba o último estado imediatamente
+
+### Observação importante de arquitetura
+
+Neste código, o LWT também usa **retain: true**. Isso implica:
+
+- O evento de falha (**LWT**) não é apenas um evento
+- Ele **altera permanentemente o estado do sistema**
+
+Ou seja:
+- "offline" vira o estado oficial até nova atualização
+
+Isso é correto para sistemas de presença (online/offline), mas exige cuidado:
+- Um falso positivo de desconexão pode sobrescrever o estado real
 
 ---
 
